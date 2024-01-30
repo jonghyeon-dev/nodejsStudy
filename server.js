@@ -6,7 +6,7 @@ app.use(express.static(__dirname + '/static')) // 폴더를 서버 파일에 등
 const { MongoClient } = require('mongodb')
 const {dbUrl,dbName} = require('./database.js') // 데이터 베이스 정보파일
 let db
-const url = dbUrl //mongodb사이트에 있던 님들의 DB 접속 URL
+const url = dbUrl //mongodb사이트에 있는 DataBase Connect에 있는 DB 접속 URL (password 부분 입력 확인)
 new MongoClient(url).connect().then((client)=>{
   console.log('DB연결성공')
   db = client.db(dbName) // 연결 데이터베이스 이름
