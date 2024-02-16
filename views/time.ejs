@@ -1,0 +1,19 @@
+<!-- ejs == html 같이 작성 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <%- include('tiles/head.ejs') %>
+</head>
+<body class="grey-bg">
+    <%- include('tiles/nav.ejs') %>
+    <div class="white-bg">
+      <div class="list-box">
+        <h4>현재시간</h4> <!-- 서버사이드 랜더링 (클라이언트사이드 렌더링도 있음)-->
+        <p><%=현재시간%></p>
+      </div>
+    </div> 
+  </body>
+</html>

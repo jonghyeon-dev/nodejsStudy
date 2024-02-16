@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <%- include('tiles/head.ejs') %>
+</head>
+<body class="grey-bg">
+    <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
+    <%- include('tiles/nav.ejs') %>
+    <div class="white-bg">
+        <form id="insertForm" class="form-box" method="POST" action="/insertCol2">
+            <div class="input-group"><span>제목 : </span><input class="form-control" type="text" name="title"></div>
+            <div class="input-group"><span>내용 : </span><input class="form-control" type="text" name="content"></div>
+            <button class="btn" type="submit">전송</button>
+        </form>
+    </div>
+</body>
+</html>

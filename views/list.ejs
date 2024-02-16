@@ -1,0 +1,33 @@
+<!-- ejs == html 같이 작성 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>타이틀</title>
+    <%- include('tiles/head.ejs') %>
+</head>
+<body class="grey-bg">
+    <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
+    <%- include('tiles/nav.ejs') %>
+    <div class="white-bg">
+      <!-- 서버사이드 랜더링 (클라이언트사이드 렌더링도 있음)-->
+      <!-- <div class="list-box">
+        <h4><%=글목록[0].title%></h4> 
+        <p><%=글목록[0].content%></p>
+      </div>
+      <div class="list-box">
+        <h4><%=글목록[1].title%></h4>
+        <p><%=글목록[1].content%></p>
+      </div> -->
+      <!-- ejs 반복문 -->
+      <% for(let i=0;i < 글목록.length; i++){ %>
+      <div class="list-box">
+        <h4><a href="/detail/<%=글목록[i]._id%>"><%=글목록[i].title%></a></h4>
+        <p><%=글목록[i].content%></p>
+      </div>
+      <% } %>
+      <a class="btn btn-primary" href="/write">글쓰기</a>
+    </div> 
+  </body>
+</html>
