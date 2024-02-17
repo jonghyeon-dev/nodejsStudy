@@ -21,13 +21,79 @@
         <p><%=글목록[1].content%></p>
       </div> -->
       <!-- ejs 반복문 -->
-      <% for(let i=0;i < 글목록.length; i++){ %>
-      <div class="list-box">
-        <h4><a href="/detail/<%=글목록[i]._id%>"><%=글목록[i].title%></a></h4>
-        <p><%=글목록[i].content%></p>
+      <div id="listBody">
+        <% for(let i=0;i < 글목록.length; i++){ %>
+        <div class="list-box">
+          <h4>
+            <a class="title" href="/detail/<%=글목록[i]._id%>"><%=글목록[i].title%></a>
+            <span class="delete">🗑️</span>
+          </h4>
+          <p><%=글목록[i].content%></p>
+          
+        </div>
+        <% } %>
       </div>
-      <% } %>
       <a class="btn btn-primary" href="/write">글쓰기</a>
     </div> 
   </body>
 </html>
+
+<script>
+
+  /** 
+   * 데이터 목록 요청
+  */
+  let getListData = function(){
+    fetch('/listData',{
+      method:"GET",
+      headers:{"Content-Type":"application/json"}
+    }).then((response)=>response.json())
+    .then((data)=>{
+      let initText = ''
+      if(data.isSucceed){
+        const listBody = document.getElementById("listBody")
+        let result = data.result
+        for(idx in result){
+          initText = initText + '<div class="list-box">\n'
+          initText = initText + ' <h4>\n'
+          initText = initText + '   <a class="title" href="/detail/'+result[idx]._id+'">'+result[idx].title+'</a>\n'
+          initText = initText + '   <span class="delete">🗑️</span>\n'
+          initText = initText + ' </h4>\n'
+          initText = initText + ' <p>'+result[idx].content+'</p>\n'
+          initText = initText + '</div>\n'
+        }
+        listBody.textContent = ''
+        listBody.innerHTML = initText
+      }else{
+        console.log(data.msg)
+      }
+    }).catch(e =>{
+      console.log("error :"+ e)
+    })
+  }
+
+  document.querySelectorAll('.delete').forEach((col) =>{
+      col.addEventListener('click', (event) =>{
+        let arg = event.currentTarget.parentNode.querySelector('.title').getAttribute('href')
+        let id = arg.substring(arg.lastIndexOf('/')+1)
+        fetch('/delete',{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({id:id})
+        })
+        .then((response)=>response.json())
+        .then((data)=>{
+          if(data.isSucceed){
+            console.log(data.msg)
+            getListData()
+          }else{
+            console.log(data.msg)
+          }
+        })
+        .catch((e)=>{
+          console.log("error :"+ e)
+        })
+        
+      })
+  })
+</script>
