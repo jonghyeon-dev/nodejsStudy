@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>타이틀</title>
+    <title>목록</title>
     <%- include('tiles/head.ejs') %>
 </head>
 <body class="grey-bg">
@@ -12,79 +12,150 @@
     <%- include('tiles/nav.ejs') %>
     <div class="white-bg">
       <!-- 서버사이드 랜더링 (클라이언트사이드 렌더링도 있음)-->
-      <!-- <div class="list-box">
-        <h4><%=글목록[0].title%></h4> 
-        <p><%=글목록[0].content%></p>
-      </div>
-      <div class="list-box">
-        <h4><%=글목록[1].title%></h4>
-        <p><%=글목록[1].content%></p>
-      </div> -->
       <!-- ejs 반복문 -->
       <div id="listBody">
         <% for(let i=0;i < 글목록.length; i++){ %>
         <div class="list-box">
           <h4>
             <a class="title" href="/detail/<%=글목록[i]._id%>"><%=글목록[i].title%></a>
-            <span class="delete">🗑️</span>
+            <span class="delete" data-id="<%=글목록[i]._id%>">🗑️</span>
           </h4>
-          <p><%=글목록[i].content%></p>
-          
         </div>
         <% } %>
       </div>
       <a class="btn btn-primary" href="/write">글쓰기</a>
-    </div> 
+    </div>
+    <ul id="pagination" class="pagination">
+      <% if(pageInfo.first) { %>
+        <li><a href="/list/1">&#171;</a></li>
+      <% } %>
+      <% if(pageInfo.prev) { %>
+        <li><a href="/list/<%=pageInfo.prev%>">&lt;</a></li>
+      <% } %>
+      <% for(let i=pageInfo.startPage;i<=pageInfo.endPage;i++){ %>
+        <% if(i == pageInfo.currentPage) { %>
+          <li><a class="active"><%=i%></a></li>
+        <% }else{ %>
+          <li><a href="/list/<%=i %>"><%=i%></a></li>
+        <% } %>
+      <% } %>
+      <% if(pageInfo.next) { %>
+        <li><a href="/list/<%=pageInfo.next%>">&gt;</a></li>
+      <% } %>
+      <% if(pageInfo.last) { %>
+        <li><a href="/list/<%=pageInfo.last%>">&#187;</a></li>
+      <% } %>
+    </ul>
   </body>
 </html>
-
+<!-- <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script> -->
 <script>
+  /*
+    axios.get('/URL',{
+      params:{
+        ID : 12345
+      }
+    }).then((response) =>{
+      console.log(r)
+    }).catch((e)=>{
+      console.log("Error:", e.response.data)
+      console.log("Error:", e.response.status)
+      console.log("Error:", e.response.headers)
+    })
 
+    axios({
+      method:'GET',
+      url:'/URL',
+      data: {
+        data1 : 'data1',
+        data2 : 'data2'
+      }
+      //,responseType: 'stream' //이미지 가져오기
+    }).then((response) => { //then 한번만 써도 됨
+      console.log(r)
+      //response.data.pipe(fs.createWriteStream('a.jpg'))
+    }).catch((e) = > {
+      console.log("Error:", e.response.data)
+      console.log("Error:", e.response.status)
+      console.log("Error:", e.response.headers)
+      // 에러시 실행 코드
+    });
+  */
   /** 
    * 데이터 목록 요청
   */
   let getListData = function(){
-    fetch('/listData',{
+    let page = document.getElementById("pagination").getElementsByClassName("active")[0].text
+    fetch('/listData?page='+page,{
       method:"GET",
       headers:{"Content-Type":"application/json"}
     }).then((response)=>response.json())
     .then((data)=>{
-      let initText = ''
       if(data.isSucceed){
-        const listBody = document.getElementById("listBody")
-        let result = data.result
+        // 데이터 처리
+        let initText = '';
+        const listBody = document.getElementById("listBody");
+        const pageBody = document.getElementById("pagination");
+        let result = data.result;
         for(idx in result){
-          initText = initText + '<div class="list-box">\n'
-          initText = initText + ' <h4>\n'
-          initText = initText + '   <a class="title" href="/detail/'+result[idx]._id+'">'+result[idx].title+'</a>\n'
-          initText = initText + '   <span class="delete">🗑️</span>\n'
-          initText = initText + ' </h4>\n'
-          initText = initText + ' <p>'+result[idx].content+'</p>\n'
-          initText = initText + '</div>\n'
+          initText = initText + '<div class="list-box">\n';
+          initText = initText + ' <h4>\n';
+          initText = initText + '   <a class="title" href="/detail/'+result[idx]._id+'">'+result[idx].title+'</a>\n';
+          initText = initText + '   <span class="delete">🗑️</span>\n';
+          initText = initText + ' </h4>\n';
+          initText = initText + '</div>\n';
         }
-        listBody.textContent = ''
-        listBody.innerHTML = initText
+
+        // 페이징 처리
+        let pageText = '';
+        let pageInfo = data.pageInfo;
+        if(pageInfo.first){
+          pageText = pageText + '<li><a href="/list/1">&#171;</a></li>\n';
+        }
+        if(pageInfo.prev){
+          pageText = pageText + '<li><a href="/list/'+(pageInfo.prev)+'">&lt;</a></li>\n';
+        }
+        for(let i=pageInfo.startPage;i<=pageInfo.endPage;i++){
+          if(i == pageInfo.currentPage){
+            pageText = pageText + '<li><a class="active">'+i+'</a></li>\n';
+          }else{
+            pageText = pageText + '<li><a href="/list/'+i+'">'+i+'</a></li>\n';
+          }
+        }
+        if(pageInfo.next){
+          pageText = pageText + '<li><a href="/list/'+(pageInfo.next)+'">&lt;</a></li>\n';
+        }
+        if(pageInfo.last){
+          pageText = pageText + '<li><a href="/list/'+pageInfo.last+'">&#187;</a></li>\n';
+        }
+
+        listBody.textContent = '';
+        listBody.innerHTML = initText;
+        pageBody.textContent = '';
+        pageBody.innerHTML = pageText;
       }else{
-        console.log(data.msg)
+        console.log(data.msg);
       }
     }).catch(e =>{
-      console.log("error :"+ e)
+      console.log("error :"+ e);
     })
   }
 
   document.querySelectorAll('.delete').forEach((col) =>{
       col.addEventListener('click', (event) =>{
-        let arg = event.currentTarget.parentNode.querySelector('.title').getAttribute('href')
-        let id = arg.substring(arg.lastIndexOf('/')+1)
+        let id = event.target.dataset.id;
         fetch('/delete',{
-          method:"POST",
+          method:"DELETE",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({id:id})
         })
+        // .then((response) => response.text())
+        // .then((text) => {console.log(text)})
         .then((response)=>response.json())
         .then((data)=>{
           if(data.isSucceed){
             console.log(data.msg)
+            // event.target.parentElement.parentElement.style.display = 'none'
             getListData()
           }else{
             console.log(data.msg)
@@ -92,8 +163,7 @@
         })
         .catch((e)=>{
           console.log("error :"+ e)
-        })
-        
-      })
-  })
+        });
+      });
+  });
 </script>

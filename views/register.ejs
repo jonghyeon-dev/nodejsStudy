@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>입력</title>
+    <%- include('tiles/head.ejs') %>
+</head>
+<body class="grey-bg">
+    <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
+    <%- include('tiles/nav.ejs') %>
+    <div class="white-bg">
+        <form id="insertForm" class="form-box" method="POST" onSubmit="return valid()">
+            <h4>가입</h4>
+            <input class="form-control" type="text" name="username">
+            <input class="form-control" type="password" name="password">
+            <input class="form-control" type="password" name="passcheck">
+            <button class="btn" type="submit" id="btn">전송</button>
+        </form>
+    </div>
+</body>
+<script language="javascript" type="text/javascript">
+    function valid(){
+        let pass1 = document.getElementById('insertForm').querySelector('input[name="password"]').value;
+        let pass2 = document.getElementById('insertForm').querySelector('input[name="passcheck"]').value;
+        if(pass1 === pass2){
+            return true;
+        }
+        alert("비밀번호와 비밀번호 확인 정보가 일치하지 않습니다.");
+        return false;
+    }
+</script>
+</html>
