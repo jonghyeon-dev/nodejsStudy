@@ -11,7 +11,7 @@
     <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
     <%- include('tiles/nav.ejs') %>
     <div class="white-bg">
-      <div class="input-group me-3"><input type="text" id="searchWord" value=""><a class="btn btn-primary" id="searchBtn">검색</a></div>
+      <div class="input-group me-3"><input type="text" id="searchWord" value="<%=searchWord%>"><a class="btn btn-primary" id="searchBtn">검색</a></div>
       <!-- 서버사이드 랜더링 (클라이언트사이드 렌더링도 있음)-->
       <!-- ejs 반복문 -->
       <div id="listBody">
@@ -27,24 +27,28 @@
       <a class="btn btn-primary" href="/board/write">글쓰기</a>
     </div>
     <ul id="pagination" class="pagination">
+      <% let searchUrl = '?searchWord=' + searchWord;
+        if(searchWord == null || searchWord == '') {
+          searchUrl = ''; 
+        }%>
       <% if(pageInfo.first) { %>
-        <li><a href="/list/1">&#171;</a></li>
+        <li><a href="/list/1<%=searchUrl%>">&#171;</a></li>
       <% } %>
       <% if(pageInfo.prev) { %>
-        <li><a href="/list/<%=pageInfo.prev%>">&lt;</a></li>
+        <li><a href="/list/<%=pageInfo.prev%><%=searchUrl%>">&lt;</a></li>
       <% } %>
       <% for(let i=pageInfo.startPage;i<=pageInfo.endPage;i++){ %>
         <% if(i == pageInfo.currentPage) { %>
           <li><a class="active"><%=i%></a></li>
         <% }else{ %>
-          <li><a href="/list/<%=i %>"><%=i%></a></li>
+          <li><a href="/list/<%=i %><%=searchUrl%>"><%=i%></a></li>
         <% } %>
       <% } %>
       <% if(pageInfo.next) { %>
-        <li><a href="/list/<%=pageInfo.next%>">&gt;</a></li>
+        <li><a href="/list/<%=pageInfo.next%><%=searchUrl%>">&gt;</a></li>
       <% } %>
       <% if(pageInfo.last) { %>
-        <li><a href="/list/<%=pageInfo.last%>">&#187;</a></li>
+        <li><a href="/list/<%=pageInfo.last%><%=searchUrl%>">&#187;</a></li>
       <% } %>
     </ul>
   </body>
@@ -109,24 +113,26 @@
         // 페이징 처리
         let pageText = '';
         let pageInfo = data.pageInfo;
+        let searchUrl = '';
+        if(searchWord != null && searchWord != "") searchUrl='?searchWord='+searchWord;
         if(pageInfo.first){
-          pageText = pageText + '<li><a href="/list/1">&#171;</a></li>\n';
+          pageText = pageText + '<li><a href="/list/1'+searchUrl+'">&#171;</a></li>\n';
         }
         if(pageInfo.prev){
-          pageText = pageText + '<li><a href="/list/'+(pageInfo.prev)+'">&lt;</a></li>\n';
+          pageText = pageText + '<li><a href="/list/'+(pageInfo.prev)+searchUrl+'">&lt;</a></li>\n';
         }
         for(let i=pageInfo.startPage;i<=pageInfo.endPage;i++){
           if(i == pageInfo.currentPage){
             pageText = pageText + '<li><a class="active">'+i+'</a></li>\n';
           }else{
-            pageText = pageText + '<li><a href="/list/'+i+'">'+i+'</a></li>\n';
+            pageText = pageText + '<li><a href="/list/'+i+searchUrl+'">'+i+'</a></li>\n';
           }
         }
         if(pageInfo.next){
-          pageText = pageText + '<li><a href="/list/'+(pageInfo.next)+'">&lt;</a></li>\n';
+          pageText = pageText + '<li><a href="/list/'+(pageInfo.next)+searchUrl+'">&lt;</a></li>\n';
         }
         if(pageInfo.last){
-          pageText = pageText + '<li><a href="/list/'+pageInfo.last+'">&#187;</a></li>\n';
+          pageText = pageText + '<li><a href="/list/'+pageInfo.last+searchUrl+'">&#187;</a></li>\n';
         }
 
         listBody.textContent = '';
@@ -157,8 +163,9 @@
           if(data.isSucceed){
             console.log(data.msg)
             // event.target.parentElement.parentElement.style.display = 'none'
+            let searchWord = document.getElementById("searchWord").value;
             let page = document.getElementById("pagination").getElementsByClassName("active")[0].textContent
-            getListData(page,'');
+            getListData(page,searchWord);
           }else{
             console.log(data.msg)
           }
@@ -171,8 +178,9 @@
 
   // 검색
   document.getElementById("searchBtn").addEventListener('click',(event)=>{
+    let page = document.getElementById("pagination").getElementsByClassName("active")[0].textContent
     let searchWord = document.getElementById("searchWord").value;
-    getListData(1,searchWord);
-    //location.href = '/list?page=1&searchWord'+searchWord;
+    //getListData(1,searchWord);
+    location.href = '/list/'+page+'?searchWord='+searchWord;
   })
 </script>

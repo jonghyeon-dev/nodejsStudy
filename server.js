@@ -215,14 +215,17 @@ app.get('/about',(request, response) =>{
 // })
 
 app.get('/list', async (request,response) =>{ // async 함수
-    
+    let searchWord = request.query.searchWord;
+    if(searchWord == null){
+        searchWord = '';
+    }
     let result = await db.collection('post').find().limit(listSize).toArray() // await은 정해진 곳에서만 쓸 수 있음
     //response.send(result[0].title) // 참고 응답을 한번만 사용가능(send,sendFile,render,redirect)
     let currentPage = 1;
     let totalCount = await db.collection('post').countDocuments();
     let pageInfo = setPageInfo(totalCount, currentPage);
     
-    return response.render('list.ejs', {글목록 : result, pageInfo : pageInfo})
+    return response.render('list.ejs', {글목록 : result, pageInfo : pageInfo, searchWord:searchWord})
 })
 
 app.get('/time', (request,response) =>{
@@ -405,8 +408,8 @@ app.get('/listData', async (request,response) =>{ // async 함수
     if(searchWord == null){
         searchWord = '';
     }
-    //let query = {title :{$regex : searchWord}};
-    let query = { $text : { $search : searchWord }};
+    let query = {title :{$regex : searchWord}};
+    // let query = { $text : { $search : searchWord }};
     // let queryArray=[{$search :{index:"title_index", text:{query: searchWord , path:'title'}}}];
     // {조건2} = {$sort: {_id : 1}} _id를 오름차순 정렬, {조건3} = {$limit : 10} 10개까지만 보여줌
     // {$project : {_id : 0}} // _id 필드를 숨겨주세요.
@@ -421,10 +424,15 @@ app.get('/listData', async (request,response) =>{ // async 함수
 
 app.get('/list/:page', async (request,response) =>{ // async 함수
     let currentPage = request.params.page;
-    let result = await db.collection('post').find().skip((currentPage-1)*listSize).limit(listSize).toArray()
-    let totalCount = await db.collection('post').countDocuments();
+    let searchWord = request.query.searchWord;
+    if(searchWord == null){
+        searchWord = '';
+    }
+    let query = {title :{$regex : searchWord}};
+    let result = await db.collection('post').find(query).skip((currentPage-1)*listSize).limit(listSize).toArray()
+    let totalCount = await db.collection('post').countDocuments(query);
     let pageInfo = setPageInfo(totalCount, currentPage);
-    return response.render('list.ejs', { 글목록 : result, pageInfo : pageInfo});
+    return response.render('list.ejs', { 글목록 : result, pageInfo : pageInfo, searchWord : searchWord});
 })
 // app.get('/list/:page', async (request,response) =>{ // async 함수
 //     const listSize = 5;
