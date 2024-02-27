@@ -10,7 +10,7 @@
     <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
     <%- include('tiles/nav.ejs') %>
     <div class="white-bg">
-        <form id="modifyForm" class="form-box" method="POST" action="/edit?_method=PUT">
+        <form id="modifyForm" class="form-box" method="POST" action="/board/edit?_method=PUT">
             <input type="hidden" name="id" value="<%= result._id %>">
             <div class="input-group"><span>제목 : </span><input class="form-control" type="text" name="title" value="<%= result.title %>"></div>
             <div class="input-group"><span>내용 : </span><input class="form-control" type="text" name="content" value="<%= result.content %>"></div>

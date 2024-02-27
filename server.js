@@ -7,6 +7,10 @@
  * npm install passport         // 회원 인증을 도와주는 메인 라이브러리
  * npm install passport-local   // ID 비번 방식으로 회원인증을 도와주는 라이브러리
  * npm install dotenv           // 환경변수 관리 라이브러리
+ * npm install multer               // 유저가 보낸 파일을 다루기 쉽게하는 라이브러리
+ * npm install multer-s3            // multer를 통해 S3 서버에 업로드를 할수 있게 도와주는 라이브러리
+ * npm install @aws-sdk/client-s3   // nodejs에서 AWS사용을 할때 필요한 sdk 라이브러리
+ * npm install uuid4            // 랜덤값 기반 uuid 생성 라이브러리
  */
 
 //서버 선언부
@@ -22,6 +26,41 @@ app.set('view engine', 'ejs') // ejs 세팅 (ejs는 views 폴더를 만들고 .e
 // DB 데이터
 const { MongoClient } = require('mongodb') //MongoDb 사용
 const ObjectId = require('mongodb').ObjectId; //Id 값을 오브젝트 형식으로 변환하여 사용하기 위해 선언
+
+// UUID V4 세팅
+const {v4} = require('uuid');
+const uuid = ()=>{
+    const tokens = v4().split('-');
+    return tokens[2] + tokens[1] +  tokens[0] + tokens[3] + tokens[4];
+}
+/** UUID V4 참조
+ * // 기본 설정으로 생성
+ * v4();
+ * 
+ * 
+ * //설정을 붙여서 생성
+ * let options={
+ *   random: // 16개의 랜덤 바이트 값
+ *    rng: //random 변수를 대체할 16개의 랜덤 바이트값을 반환하는 함수
+ * }
+ * v4(options);
+ * 
+ * 
+ * //index UUID
+ * UUID를 그대로 사용하면 16진수의 문자열과 '-'로 이루어져 있기 때문에 String 형태로 저장되며
+ * DB에서 String 데이터를 인덱싱 하면 인덱스도 비정상적으로 커지며 검색 성능도 많이 떨어져
+ * 아래 링크의 방법으로 UUID값을 인덱싱이 가능하고 순서를 보장 받는 체계로 변경하는 방법을 사용합니다. 
+ * https://www.percona.com/blog/2014/12/19/store-uuid-optimized-way/
+ * 
+ * 요약: 1-2-3-4-5 의 구조를 32145 로 변경하면 어느 정도 보장을 받을 수 있는 체계로 변환할 수 있습니다.
+ * JS코드 예시 :
+ * const { v4 } = require('uuid');
+ * const uuid = ()=>{
+ *      const tokens = v4().split('-');
+ *      return tokens[2] + tokens[1] +  tokens[0] + tokens[3] + tokens[4];
+ * }
+ * uuid();
+ */ 
 
 // 회원 로그인 관련 passport 라이브러리 세팅
 const session = require('express-session');
@@ -42,7 +81,7 @@ app.use(session({
     secret: process.env.SESSION_SECRET, // 암호화에 쓸 비밀번호
     resave: false,
     saveUninitialized: false,
-    cookie: {maxAge : process.env.COOKIE_TIME}, // 쿠키 유효 시간
+    cookie: {maxAge : 60*60*1000}, // 쿠키 유효 시간
     store: MongoStore.create({
         mongoUrl:process.env.DB_URL,
         dbName:process.env.DB_NAME
@@ -51,20 +90,43 @@ app.use(session({
 app.use(passport.session())
 
 // DB 세팅부
-const url = process.env.DB_URL //mongodb사이트에 있는 DataBase Connect에 있는 DB 접속 URL (password 부분 입력 확인)
+connectDB = require('./database.js');
 let db // 다른 요청에서 connection을 사용하기 위해 db listen 바깥에 선언
-new MongoClient(url).connect().then((client)=>{
-  console.log('DB연결성공')
+connectDB.then((client)=>{
+  console.log('mongoDB연결성공')
   db = client.db(process.env.DB_NAME) // 연결 데이터베이스 이름
-  app.listen(process.env.PORT,()=>{
+  app.listen(process.env.PORT,()=>{ //서버 기동 명령어 app.listen(port,function(){ ~ })
     console.log('http://localhost:'+process.env.PORT+' 에서 서버 실행 중') 
     })
 }).catch((err)=>{
   console.log(err)
 })
 
+// AWS S3 이미지 업로드 세팅
+const { S3Client } = require('@aws-sdk/client-s3')
+const multer = require('multer')
+const multerS3 = require('multer-s3')
+const s3 = new S3Client({
+  region : 'ap-northeast-2', // 서울 리전
+  credentials : {
+      accessKeyId : process.env.S3_KEY, //
+      secretAccessKey : process.env.S3_SECRET //
+  }
+})
+
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: process.env.S3_BUCKETNAME,
+    key: function (request, file, cb) {
+        console.log(request.file);
+      cb(null, uuid()) //업로드시 파일명 변경가능
+    }
+  })
+})
+
 // 페이징 기초 데이터 세팅
-const listSize = 5; // 화면에 표시할 데이터 개수
+const listSize = 10; // 화면에 표시할 데이터 개수
 const pageSize = 5; // 화면에 표시할 페이지 개수
 // 페이징 처리 함수
 function setPageInfo(totalCount,currentPage){
@@ -106,13 +168,17 @@ function middleWare(request,response,next){
     //request.body response.redirect 등 사용 가능
     if(!request.user){
         // response가 실행되면 아래 다른 코드가 실행 안됨
-        response.send('로그인을 하세요.')
+        return response.send('로그인을 하세요.')
     }
     next() // 마지막에 없으면 무한 대기 상태에 들어감
 }
 
+// url 이 포함된 전체 api에 적용
+app.use('/list',middleWare);
+app.use('/board',middleWare);
+
 // '/'로 요청 후 middleWare 실행 이 후 마지막 request,response 함수 실행
-app.get('/', middleWare,(request, response) =>{
+app.get('/', (request, response) =>{
     response.render('index.ejs') // html화면 전송 시 sendFile 사용, __dirname: 현재 프로잭트 절대경로
 })
 /**
@@ -136,16 +202,17 @@ function userValidCheck(request,response,next){
     next();
 }
 
+
 app.use('/list',nowTime2Turminal);
 
 app.get('/about',(request, response) =>{
     response.sendFile(__dirname + '/about.html')
 })
 
-app.get('/getInst',(request, response) =>{
-    db.collection('post').insertOne({title : '제목입니다.',content : '내용입니다.'})
-    response.send('데이터가 등록되었습니다.')
-})
+// app.get('/getInst',(request, response) =>{
+//     db.collection('post').insertOne({title : '제목입니다.',content : '내용입니다.'})
+//     response.send('데이터가 등록되었습니다.')
+// })
 
 app.get('/list', async (request,response) =>{ // async 함수
     
@@ -155,7 +222,7 @@ app.get('/list', async (request,response) =>{ // async 함수
     let totalCount = await db.collection('post').countDocuments();
     let pageInfo = setPageInfo(totalCount, currentPage);
     
-    response.render('list.ejs', {글목록 : result, pageInfo : pageInfo})
+    return response.render('list.ejs', {글목록 : result, pageInfo : pageInfo})
 })
 
 app.get('/time', (request,response) =>{
@@ -185,33 +252,42 @@ app.get('/time', (request,response) =>{
  *  6. Code on demand
  *  서버는 실행가능한 코드를 보낼 수 있습니다.
  */ 
-app.get('/write',(request,response)=>{
-    let user = request.user;
-    if(!user) response.status(401).send('잘못된 접근입니다.');
-    response.render('write.ejs')
-})
+// app.get('/write',(request,response)=>{
+//     let user = request.user;
+//     if(!user) response.status(401).send('잘못된 접근입니다.');
+//     return response.render('write.ejs')
+// })
 
-app.post('/insert', async (request,response) =>{
-    let user = request.user;
-    if(!user) response.status(401).send('잘못된 접근입니다.');
-    var add = request.body // 클라이언트가 전송한 데이터를 .body를 통해 가져옴 (윗부분 사전 세팅 선언 코드 있음 L7~8)
-    if(add.title === null || add.title.trim() === ''){
-        response.send("제목이 없습니다.")
-    }else if(add.content === null || add.content.trim() === ''){
-        response.send("내용이 없습니다.")
-    }else if(add.title.length > 20){
-        response.send("제목은 20자리를 넘을 수 없습니다.")
-    }else{
-        try{
-            //어떤 데이터가 어떤 형식으로 올 지 모르므로 등록 할 각각의 데이터를 확실하게 표시하여 등록
-            await db.collection('post').insertOne({title : add.title, content : add.content}) 
-            response.redirect('/list')
-        }catch(e){
-            console.log(e) //에러 메시지 출력
-            response.status(500).send('서버 에러') //서버 에러시 에러코드도 같이 전송해 주는게 좋음
-        }   
-    }
-})
+// upload.single() 하나만 업로드
+// upload.array() 여러개 업로드
+//  - ('~',숫자) : 숫자 만큼의 파일까지만 업로드 3일시 4개올리면 오류
+// app.post('/insert',(request,response) =>{
+//     let user = request.user;
+//     if(!user) response.status(401).send('잘못된 접근입니다.'); 
+//     upload.single('img1')(request,response,async (err) =>{
+//         if(err) return response.send('업로드 에러')
+//         console.log(request.file);
+//         console.log(request.file.location);
+//         try{
+//             var add = request.body // 클라이언트가 전송한 데이터를 .body를 통해 가져옴 (윗부분 사전 세팅 선언 코드 있음 L7~8)
+//             if(add.title === null || add.title.trim() === ''){
+//                 response.send("제목이 없습니다.")
+//             }else if(add.content === null || add.content.trim() === ''){
+//                 response.send("내용이 없습니다.")
+//             }else if(add.title.length > 20){
+//                 response.send("제목은 20자리를 넘을 수 없습니다.")
+//             }else{
+//                 // 어떤 데이터가 어떤 형식으로 올 지 모르므로 등록 할 각각의 데이터를 확실하게 표시하여 등록
+//                 // 이미지 저장시 여러개 저장할때면 mongoDB에서는 array 형식으로 저장 가능
+//                 await db.collection('post').insertOne({title : add.title, content : add.content, img:request.file.location}) 
+//                 response.redirect('/list')
+//             }
+//         }catch(e){
+//             console.log(e) //에러 메시지 출력
+//             response.status(500).send('서버 에러') //서버 에러시 에러코드도 같이 전송해 주는게 좋음
+//         }
+//     })
+// })
 
 app.get('/detail/:id', async (request,response) =>{
     let user = request.user;
@@ -228,23 +304,23 @@ app.get('/detail/:id', async (request,response) =>{
         response.status(404).send("잘못된 URL 입니다.")
     }
     
-})
+ })
 
-app.get('/modify/:id', async(request,response)=>{
-    let user = request.user;
-    if(!user) response.status(401).send('잘못된 접근입니다.');
-    let id = request.params.id // url param 가져오는 명령어
-    try{
-        let result = await db.collection('post').findOne({ _id : new ObjectId(id)}) //상단에 ObjectId 함수 선언 필수 (L15)
-        if(result == null || result == ''){
-            response.status(404).send("잘못된 URL 입니다.")
-        }
-        response.render('modify.ejs',{result : result})
-    }catch(e){
-        console.log(e)
-        response.status(404).send("잘못된 URL 입니다.")
-    }
-})
+// app.get('/modify/:id', async(request,response)=>{
+//     let user = request.user;
+//     if(!user) response.status(401).send('잘못된 접근입니다.');
+//     let id = request.params.id // url param 가져오는 명령어
+//     try{
+//         let result = await db.collection('post').findOne({ _id : new ObjectId(id)}) //상단에 ObjectId 함수 선언 필수 (L15)
+//         if(result == null || result == ''){
+//             response.status(404).send("잘못된 URL 입니다.")
+//         }
+//         response.render('modify.ejs',{result : result})
+//     }catch(e){
+//         console.log(e)
+//         response.status(404).send("잘못된 URL 입니다.")
+//     }
+// })
 
 /**
  * db 명령어 정보
@@ -274,48 +350,73 @@ app.get('/modify/:id', async(request,response)=>{
  * $mul 곱셈 진행   //숫자 값에만
  * $unset 필드 값 삭제 //해당 데이터를 사용하지 않음
  */
-app.put('/edit', async(request,response) =>{
-    let user = request.user;
-    if(!user) response.status(401).send('잘못된 접근입니다.');
-    let reqData = request.body;
-    if(reqData.id === null || reqData.id.trim() === ''){
-        response.send("잘못된 접근입니다.");
-    }else if(reqData.title === null || reqData.title.trim() === ''){
-        response.send("제목이 없습니다.");
-    }else if(reqData.content === null || reqData.content.trim() === ''){
-        response.send("내용이 없습니다.");
-    }else if(reqData.title.length > 20){
-        response.send("제목은 20자리를 넘을 수 없습니다.");
-    }else{
-        try{
-            await db.collection('post').updateOne({ _id: new ObjectId(reqData.id) },
-            {$set : {title : reqData.title, content : reqData.content}});
-            response.redirect('/detail/'+reqData.id);
-        }catch(e){
-            console.log(e);
-            response.status(500).send("서버 에러");
-        }
-    }
-})
+// app.put('/edit', async(request,response) =>{
+//     let user = request.user;
+//     if(!user) response.status(401).send('잘못된 접근입니다.');
+//     let reqData = request.body;
+//     if(reqData.id === null || reqData.id.trim() === ''){
+//         response.send("잘못된 접근입니다.");
+//     }else if(reqData.title === null || reqData.title.trim() === ''){
+//         response.send("제목이 없습니다.");
+//     }else if(reqData.content === null || reqData.content.trim() === ''){
+//         response.send("내용이 없습니다.");
+//     }else if(reqData.title.length > 20){
+//         response.send("제목은 20자리를 넘을 수 없습니다.");
+//     }else{
+//         try{
+//             await db.collection('post').updateOne({ _id: new ObjectId(reqData.id) },
+//             {$set : {title : reqData.title, content : reqData.content}});
+//             response.redirect('/detail/'+reqData.id);
+//         }catch(e){
+//             console.log(e);
+//             response.status(500).send("서버 에러");
+//         }
+//     }
+// })
 
-app.delete('/delete', async (req,res)=>{
-    try{
-        await db.collection('post').deleteOne({_id: new ObjectId(req.body.id)});
-        res.json({isSucceed : true, msg : "성공적으로 삭제하였습니다."});
-    }catch(e){
-        console.log("Error:", e.response.data);
-        console.log("Error:", e.response.status);
-        console.log("Error:", e.response.headers);
-        res.json({isSucceed: false, msg:"삭제에 실패하였습니다."});
-    }
-})
+// app.delete('/delete', async (req,res)=>{
+//     try{
+//         await db.collection('post').deleteOne({_id: new ObjectId(req.body.id)});
+//         res.json({isSucceed : true, msg : "성공적으로 삭제하였습니다."});
+//     }catch(e){
+//         console.log("Error:", e.response.data);
+//         console.log("Error:", e.response.status);
+//         console.log("Error:", e.response.headers);
+//         res.json({isSucceed: false, msg:"삭제에 실패하였습니다."});
+//     }
+// })
 
+// mongoDB 에서 기본index 생성시 text로 index를 만들면 띄워쓰기 기준으로만 index를 만듦 한글에서는 별로 효용이 없음
+/** 
+ * Search Index(Full Text Index)
+ * 동작 원리
+ *  1. 문장에서 조사, 불용어 등 제거 (을, 를, 이, 가)
+ *  2. 모든 단어들 뽑아서 정렬
+ *  3. 어떤 document에 등장했는지 _id 표기
+ *  4. seafood 검색 시 seafood 와 매칭되는 _id 표기를 가져옴
+ *  5. 
+ */
 app.get('/listData', async (request,response) =>{ // async 함수
     let currentPage = request.query.page;
-    let result = await db.collection('post').find().skip((currentPage-1)*listSize).limit(listSize).toArray(); // await은 정해진 곳에서만 쓸 수 있음
-    let totalCount = await db.collection('post').countDocuments();
+    let searchWord = request.query.searchWord;
+    if(currentPage == null || currentPage == ''){
+        currentPage = 1
+    }
+    if(searchWord == null){
+        searchWord = '';
+    }
+    //let query = {title :{$regex : searchWord}};
+    let query = { $text : { $search : searchWord }};
+    // let queryArray=[{$search :{index:"title_index", text:{query: searchWord , path:'title'}}}];
+    // {조건2} = {$sort: {_id : 1}} _id를 오름차순 정렬, {조건3} = {$limit : 10} 10개까지만 보여줌
+    // {$project : {_id : 0}} // _id 필드를 숨겨주세요.
+    // aggregate 를 사용하면 여러 옵션을 사용 가능
+    // let excution = await db.collection('post').aggregate(queryArray);
+    // console.log(excution);
+    let result = await db.collection('post').find(query).skip((currentPage-1)*listSize).limit(listSize).toArray(); // await은 정해진 곳에서만 쓸 수 있음
+    let totalCount = await db.collection('post').countDocuments(query);
     let pageInfo = setPageInfo(totalCount, currentPage);
-    response.json({ result : result, pageInfo : pageInfo ,isSucceed: true});
+    return response.json({ result : result, pageInfo : pageInfo ,isSucceed: true});
 })
 
 app.get('/list/:page', async (request,response) =>{ // async 함수
@@ -323,7 +424,7 @@ app.get('/list/:page', async (request,response) =>{ // async 함수
     let result = await db.collection('post').find().skip((currentPage-1)*listSize).limit(listSize).toArray()
     let totalCount = await db.collection('post').countDocuments();
     let pageInfo = setPageInfo(totalCount, currentPage);
-    response.render('list.ejs', { 글목록 : result, pageInfo : pageInfo});
+    return response.render('list.ejs', { 글목록 : result, pageInfo : pageInfo});
 })
 // app.get('/list/:page', async (request,response) =>{ // async 함수
 //     const listSize = 5;
@@ -381,6 +482,17 @@ app.post('/login',userValidCheck, async(request, response, next)=>{
     })(request, response, next);
 })
 
+app.get('/logout',(req,res,next)=>{
+    req.logout(err=>{
+        if(err){
+            return next(err);
+        }else{
+            console.log('로그아웃 됨.')
+            res.redirect('/');
+        }
+    });
+})
+
 app.get('/mypage',(request,response) =>{
     let user = request.user;
     console.log(user);
@@ -391,12 +503,12 @@ app.get('/mypage',(request,response) =>{
 
 app.get('/register',(request,response) =>{
 
-    response.render('register.ejs')
+    response.render('register.ejs');
 })
 
 app.post('/register',userValidCheck,async(request,response) =>{
     let hashPass = await bcrypt.hash(request.body.password, 10);// data, 몇 번 꼬아줄지 횟수 10번정도가 적당
-    let checkDup = await db.collection('user').findOne({username: request.body.username})
+    let checkDup = await db.collection('user').findOne({username: request.body.username});
     if(checkDup){
          response.status(401).send('아이디 중복');
     }else if(request.body.password != request.body.passcheck){ 
@@ -406,7 +518,14 @@ app.post('/register',userValidCheck,async(request,response) =>{
         await db.collection('user').insertOne({
             username: request.body.username,
             password: hashPass
-        })
-        response.redirect('/')
+        });
+        response.redirect('/');
     }
 })
+// 라우터 분리 파일 사용방법
+// app.use() 안에 require로 해당 파일 사용
+// 참고1. import로도 사용가능 import 사용시 require 를 import로 전부 변경 필요
+// 참고2. 공통된 URL 시작부분은 축약 가능 app.use('/shop','./router/shop.js')
+app.use('/shop',require('./routes/shop.js'));
+
+app.use('/board',require('./routes/board.js'));

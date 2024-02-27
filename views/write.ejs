@@ -10,9 +10,10 @@
     <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
     <%- include('tiles/nav.ejs') %>
     <div class="white-bg">
-        <form id="insertForm" class="form-box" method="POST" action="/insert">
+        <form id="insertForm" class="form-box" method="POST" action="/board/insert" enctype="multipart/form-data">
             <div class="input-group"><span>제목 : </span><input class="form-control" type="text" name="title"></div>
             <div class="input-group"><span>내용 : </span><input class="form-control" type="text" name="content"></div>
+            <div class="input-group"><span>이미지 : </span><input type="file" accept="image/*" name="img1"></div>
             <button class="btn" type="submit">전송</button>
             <a class="btn btn-primary" href="/list">돌아가기</a>
         </form>

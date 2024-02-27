@@ -11,6 +11,7 @@
     <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
     <%- include('tiles/nav.ejs') %>
     <div class="white-bg">
+      <div class="input-group me-3"><input type="text" id="searchWord" value=""><a class="btn btn-primary" id="searchBtn">검색</a></div>
       <!-- 서버사이드 랜더링 (클라이언트사이드 렌더링도 있음)-->
       <!-- ejs 반복문 -->
       <div id="listBody">
@@ -23,7 +24,7 @@
         </div>
         <% } %>
       </div>
-      <a class="btn btn-primary" href="/write">글쓰기</a>
+      <a class="btn btn-primary" href="/board/write">글쓰기</a>
     </div>
     <ul id="pagination" class="pagination">
       <% if(pageInfo.first) { %>
@@ -50,7 +51,7 @@
 </html>
 <!-- <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script> -->
 <script>
-  /*
+  /* // axios 예시
     axios.get('/URL',{
       params:{
         ID : 12345
@@ -84,9 +85,8 @@
   /** 
    * 데이터 목록 요청
   */
-  let getListData = function(){
-    let page = document.getElementById("pagination").getElementsByClassName("active")[0].text
-    fetch('/listData?page='+page,{
+  let getListData = function(page,searchWord){
+    fetch('/listData?page='+page+'&searchWord='+searchWord,{
       method:"GET",
       headers:{"Content-Type":"application/json"}
     }).then((response)=>response.json())
@@ -141,10 +141,11 @@
     })
   }
 
+  // 삭제
   document.querySelectorAll('.delete').forEach((col) =>{
       col.addEventListener('click', (event) =>{
         let id = event.target.dataset.id;
-        fetch('/delete',{
+        fetch('/board/delete',{
           method:"DELETE",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({id:id})
@@ -156,7 +157,8 @@
           if(data.isSucceed){
             console.log(data.msg)
             // event.target.parentElement.parentElement.style.display = 'none'
-            getListData()
+            let page = document.getElementById("pagination").getElementsByClassName("active")[0].textContent
+            getListData(page,'');
           }else{
             console.log(data.msg)
           }
@@ -166,4 +168,11 @@
         });
       });
   });
+
+  // 검색
+  document.getElementById("searchBtn").addEventListener('click',(event)=>{
+    let searchWord = document.getElementById("searchWord").value;
+    getListData(1,searchWord);
+    //location.href = '/list?page=1&searchWord'+searchWord;
+  })
 </script>
