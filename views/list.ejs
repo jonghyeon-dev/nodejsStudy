@@ -19,7 +19,9 @@
         <div class="list-box">
           <h4>
             <a class="title" href="/detail/<%=글목록[i]._id%>"><%=글목록[i].title%></a>
-            <span class="delete" data-id="<%=글목록[i]._id%>">🗑️</span>
+            <% if(String(글목록[i].user) == String(user._id)) { %>
+              <span class="delete" data-id="<%=글목록[i]._id%>">🗑️</span>
+            <% } %>
           </h4>
         </div>
         <% } %>
@@ -105,11 +107,12 @@
           initText = initText + '<div class="list-box">\n';
           initText = initText + ' <h4>\n';
           initText = initText + '   <a class="title" href="/detail/'+result[idx]._id+'">'+result[idx].title+'</a>\n';
-          initText = initText + '   <span class="delete">🗑️</span>\n';
+          if(result[idx].del){
+            initText = initText + '   <span class="delete">🗑️</span>\n';
+          } 
           initText = initText + ' </h4>\n';
           initText = initText + '</div>\n';
         }
-
         // 페이징 처리
         let pageText = '';
         let pageInfo = data.pageInfo;

@@ -102,29 +102,6 @@ connectDB.then((client)=>{
   console.log(err)
 })
 
-// AWS S3 이미지 업로드 세팅
-const { S3Client } = require('@aws-sdk/client-s3')
-const multer = require('multer')
-const multerS3 = require('multer-s3')
-const s3 = new S3Client({
-  region : 'ap-northeast-2', // 서울 리전
-  credentials : {
-      accessKeyId : process.env.S3_KEY, //
-      secretAccessKey : process.env.S3_SECRET //
-  }
-})
-
-const upload = multer({
-  storage: multerS3({
-    s3: s3,
-    bucket: process.env.S3_BUCKETNAME,
-    key: function (request, file, cb) {
-        console.log(request.file);
-      cb(null, uuid()) //업로드시 파일명 변경가능
-    }
-  })
-})
-
 // 페이징 기초 데이터 세팅
 const listSize = 10; // 화면에 표시할 데이터 개수
 const pageSize = 5; // 화면에 표시할 페이지 개수
@@ -203,7 +180,7 @@ function userValidCheck(request,response,next){
 }
 
 
-app.use('/list',nowTime2Turminal);
+// app.use('/list',nowTime2Turminal);
 
 app.get('/about',(request, response) =>{
     response.sendFile(__dirname + '/about.html')
@@ -225,7 +202,11 @@ app.get('/list', async (request,response) =>{ // async 함수
     let totalCount = await db.collection('post').countDocuments();
     let pageInfo = setPageInfo(totalCount, currentPage);
     
-    return response.render('list.ejs', {글목록 : result, pageInfo : pageInfo, searchWord:searchWord})
+    return response.render('list.ejs',
+     {글목록 : result,
+      pageInfo : pageInfo, 
+      searchWord:searchWord,
+      user:request.user});
 })
 
 app.get('/time', (request,response) =>{
@@ -296,12 +277,24 @@ app.get('/detail/:id', async (request,response) =>{
     let user = request.user;
     if(!user) response.status(401).send('잘못된 접근입니다.');
     let id = request.params.id // url param 가져오는 명령어
+    let currentPage = request.query.recomPage;
+    if(currentPage == null || currentPage == ''){
+        currentPage = 1
+    }
     try{
         let result = await db.collection('post').findOne({ _id : new ObjectId(id)}) //상단에 ObjectId 함수 선언 필수 (L15)
+        let resultRecom = await db.collection('postRecom').find({postId:new ObjectId(id)}).skip((currentPage-1)*listSize).limit(listSize).toArray();
         if(result == null || result == ''){
             response.status(404).send("잘못된 URL 입니다.")
         }
-        response.render('detail.ejs',{result : result})
+        let totalCount = await db.collection('postRecom').countDocuments({postId:new ObjectId(id)});
+        let pageInfo = setPageInfo(totalCount, currentPage);
+        return response.render('detail.ejs',{
+                            result : result,
+                            user : request.user, 
+                            댓글: resultRecom, 
+                            pageInfo:pageInfo
+                        });
     }catch(e){
         console.log(e)
         response.status(404).send("잘못된 URL 입니다.")
@@ -391,6 +384,13 @@ app.get('/detail/:id', async (request,response) =>{
 
 // mongoDB 에서 기본index 생성시 text로 index를 만들면 띄워쓰기 기준으로만 index를 만듦 한글에서는 별로 효용이 없음
 /** 
+ * Index
+ *  1. 인덱싱된 데이터를 빠르게 검색
+ *  2. 생성시 용량을 추가로 차지함
+ *  3. regex 검색 불가
+ *  4. text를 index로 지정하면 띄워쓰기를 기준으로 단어별 검색가능 
+ *    - 예: 제목 입니다. => word1 = 제목, word2 = 입니다. {$text :{$search: 제목 or 입니다.} 로만 검색 가능
+ * 
  * Search Index(Full Text Index)
  * 동작 원리
  *  1. 문장에서 조사, 불용어 등 제거 (을, 를, 이, 가)
@@ -400,6 +400,8 @@ app.get('/detail/:id', async (request,response) =>{
  *  5. 
  */
 app.get('/listData', async (request,response) =>{ // async 함수
+    let user = request.user;
+    if(!user) return response.json({IsSucceed:false, msg:"적합한 사용자가 아닙니다."});
     let currentPage = request.query.page;
     let searchWord = request.query.searchWord;
     if(currentPage == null || currentPage == ''){
@@ -409,17 +411,30 @@ app.get('/listData', async (request,response) =>{ // async 함수
         searchWord = '';
     }
     let query = {title :{$regex : searchWord}};
-    // let query = { $text : { $search : searchWord }};
-    // let queryArray=[{$search :{index:"title_index", text:{query: searchWord , path:'title'}}}];
-    // {조건2} = {$sort: {_id : 1}} _id를 오름차순 정렬, {조건3} = {$limit : 10} 10개까지만 보여줌
+    let projection = {title:1};
+    // 기본 index 사용
+    // let query = { $text : { $search : searchWord }}; // index검색은 regex 사용 불가
+    // SearchIndex 사용
+    // let queryOption=[{$search :{index:"title_index", text:{query: searchWord , path:'title'}}}];
+    // {조건2} = {$sort: {_id : 1}} _id를 오름차순 정렬, {조건3} = {$limit : 10} 10개까지만 검색
     // {$project : {_id : 0}} // _id 필드를 숨겨주세요.
     // aggregate 를 사용하면 여러 옵션을 사용 가능
-    // let excution = await db.collection('post').aggregate(queryArray);
+    // let excution = await db.collection('post').aggregate(queryOption);
     // console.log(excution);
-    let result = await db.collection('post').find(query).skip((currentPage-1)*listSize).limit(listSize).toArray(); // await은 정해진 곳에서만 쓸 수 있음
+    /** DB 검색 성능평가 db.collection('post').find(query).explain("executionStats");
+     * totalDocsExamined : 몇개의 document를 확인했는지
+     * stage 가 COLLSCAN 라고 뜨면 모든 document를 확인했다는 뜻
+     */
+    let userId = request.user._id;
+    let result = await db.collection('post').find(query).project({title:1,user:1}).skip((currentPage-1)*listSize).limit(listSize).toArray(); // await은 정해진 곳에서만 쓸 수 있음
+    for(idx in result){
+        if(String(userId) == String(result[idx].user)){
+            result[idx].del = true;
+        }
+    }
     let totalCount = await db.collection('post').countDocuments(query);
     let pageInfo = setPageInfo(totalCount, currentPage);
-    return response.json({ result : result, pageInfo : pageInfo ,isSucceed: true});
+    return response.json({ result : result, pageInfo : pageInfo, isSucceed: true});
 })
 
 app.get('/list/:page', async (request,response) =>{ // async 함수
@@ -432,7 +447,12 @@ app.get('/list/:page', async (request,response) =>{ // async 함수
     let result = await db.collection('post').find(query).skip((currentPage-1)*listSize).limit(listSize).toArray()
     let totalCount = await db.collection('post').countDocuments(query);
     let pageInfo = setPageInfo(totalCount, currentPage);
-    return response.render('list.ejs', { 글목록 : result, pageInfo : pageInfo, searchWord : searchWord});
+    return response.render('list.ejs', { 
+        글목록 : result, 
+        pageInfo : pageInfo, 
+        searchWord : searchWord,
+        user:request.user
+    });
 })
 // app.get('/list/:page', async (request,response) =>{ // async 함수
 //     const listSize = 5;
@@ -460,7 +480,6 @@ passport.use(new LocalStrategy(async (입력한아이디, 입력한비번, callb
 }))
 
 passport.serializeUser((user, done) => {
-    // console.log(user)
     process.nextTick(() => { // nextTick: 내부의 특정 코드를 비동기적으로 처리해줌 (queueMicrotask())
         done(null, { id: user._id, username: user.username }); // 유효 기간은 알아서 처리해줌 기본 2주 (설정 변경 가능)
     }) // 이제 로그인시 세션 document 발행 그리고 그 document의 _id를 쿠키에 적어서 보내줌
@@ -475,8 +494,12 @@ passport.deserializeUser(async (user, done) => {
 })
 
 app.get('/login', (request,response)=>{
-    console.log(request.user);
-    response.render('login.ejs');
+    let user = request.user;
+    if(!user){ 
+        response.render('login.ejs');
+    }else{
+        response.redirect("/");
+    }
 })
 
 app.post('/login',userValidCheck, async(request, response, next)=>{
@@ -495,7 +518,6 @@ app.get('/logout',(req,res,next)=>{
         if(err){
             return next(err);
         }else{
-            console.log('로그아웃 됨.')
             res.redirect('/');
         }
     });
@@ -503,7 +525,6 @@ app.get('/logout',(req,res,next)=>{
 
 app.get('/mypage',(request,response) =>{
     let user = request.user;
-    console.log(user);
     if(!user) response.status(401).send('잘못된 접근입니다.');
     response.render('mypage.ejs',{정보 : user});
 })

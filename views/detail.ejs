@@ -14,7 +14,97 @@
         <p><%=result.content%></p>
         <img src="<%=result.img%>">
     </div>
+    <div class="list-body white-bg" id="recomArea">
+        <% for(let i=0 ; i < 댓글.length ; i++ ){ %> 
+            <div class="list-box">
+                <span><%=댓글[i].username%></span>님의 댓글:&nbsp;
+                <div class="row">
+                <p class="col recomText"><%=댓글[i].content%></p>
+                <% if(String(댓글[i].user) == String(user._id)){%>
+                    <form class="form-box recomModifyArea" style="display:none" method="POST" action="/board/modifyRecom?_method=PUT">
+                        <input type="hidden" name="boardId" value="<%=result._id%>">
+                        <input type="hidden" name="recomId" value="<%=댓글[i]._id%>">
+                        <input class="form-control" type="text" name="content" value="<%=댓글[i].content%>">
+                        <button type="button" class="btn btn-warning ms-2 float-end recomModifyCancle">취소</button>
+                        <button type="submit" class="btn float-end">등록</button>
+                    </form>
+                    <div class="col recomBtnArea">
+                        <a class="btn btn-sm btn-danger float-end recDelete" data-id="<%=댓글[i]._id%>">삭제</a>
+                        <a class="btn btn-sm btn-success float-end recModify">수정</a>
+                    </div>
+                    <script>
+                        document.querySelectorAll('.recModify').forEach((col) =>{
+                          col.addEventListener('click', (event) =>{
+                            event.target.parentNode.style.display="none";
+                            event.target.parentNode.parentNode.querySelectorAll(".recomModifyArea")[0].style.display="inline";
+                            event.target.parentNode.parentNode.querySelectorAll(".recomText")[0].style.display="none";
+                          });
+                        });
+                    
+                        document.querySelectorAll('.recomModifyCancle').forEach((col) =>{
+                          col.addEventListener('click', (event) =>{
+                            event.target.parentNode.style.display="none";
+                            event.target.parentNode.parentNode.querySelectorAll(".recomText")[0].style.display="inline";
+                            event.target.parentNode.parentNode.querySelectorAll(".recomBtnArea")[0].style.display="inline";
+                          });
+                        });
+                    
+                        document.querySelectorAll('.recDelete').forEach((col) =>{
+                          col.addEventListener('click', (event) =>{
+                            let id = event.target.dataset.id;
+                            console.log("삭제ID: "+id);
+                            fetch('/board/deleteRecom',{
+                                method:"DELETE",
+                                body:JSON.stringify({id:id}),
+                                headers:{"Content-Type":"application/json"}
+                                }).then((response)=>response.json())
+                                .then((data)=>{
+                                    if(data.isSucceed){
+                                        location.reload();
+                                    }else{
+                                        console.log(data.msg);
+                                    }
+                            });
+                          });
+                        });
+                    </script>
+                <% } %>
+                </div>
+            </div>
+        <% } %>
+        <ul id="pagination" class="pagination pt-2 pb-2">
+            <% if(pageInfo.first) { %>
+                <li><a href="/detail/<%=result._id%>?recomPage=<%=pageInfo.first%>">&#171;</a></li>
+            <% } %>
+            <% if(pageInfo.prev) { %>
+                <li><a href="/detail/<%=result._id%>?recomPage=<%=pageInfo.prev%>">&lt;</a></li>
+            <% } %>
+            <% for(let i=pageInfo.startPage;i<=pageInfo.endPage;i++){ %>
+            <% if(i == pageInfo.currentPage) { %>
+                <li><a class="active"><%=i%></a></li>
+            <% }else{ %>
+                <li><a href="/detail/<%=result._id%>?recomPage=<%=i %>"><%=i%></a></li>
+            <% } %>
+            <% } %>
+            <% if(pageInfo.next) { %>
+                <li><a href="/detail/<%=result._id%>?recomPage=<%=pageInfo.next%>">&gt;</a></li>
+            <% } %>
+            <% if(pageInfo.last) { %>
+                <li><a href="/detail/<%=result._id%>?recomPage=<%=pageInfo.last%>">&#187;</a></li>
+            <% } %>
+        </ul>
+    </div>
+    <form id="recomForm" class="form-box" method="POST" action="/board/addRecom">
+        <input type="hidden" name="postId" value="<%=result._id%>">
+        <div class="input-group">
+            <h4><strong>댓글쓰기</strong></h4>
+            <input type="text" name="content">
+        </div>
+        <button type="submit">작성</button>
+    </form>
     <a class="btn btn-primary" href="/list">목록</a>
+    <% if(String(result.user) == String(user._id)){%>
     <a class="btn btn-primary" href="/board/modify/<%=result._id%>">수정</a>
+    <% } %>
 </body>
 </html>

@@ -14,6 +14,7 @@
             <input type="hidden" name="id" value="<%= result._id %>">
             <div class="input-group"><span>제목 : </span><input class="form-control" type="text" name="title" value="<%= result.title %>"></div>
             <div class="input-group"><span>내용 : </span><input class="form-control" type="text" name="content" value="<%= result.content %>"></div>
+            <div class="input-group"><span>이미지 : </span><input type="file" accept="image/*" name="img1"></div>
             <button class="btn" type="submit">전송</button>
             <a href="/detail/<%= result._id %>" class="btn btn-primary">수정취소</a>
         </form>
