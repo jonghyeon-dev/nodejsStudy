@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>상세</title>
-    <%- include('tiles/head.ejs') %>
+    <%- include('navigation/head.ejs') %>
 </head>
 <body class="grey-bg">
     <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
-    <%- include('tiles/nav.ejs') %>
+    <%- include('navigation/nav.ejs') %>
     <div class="detail-bg">
         <h2><%=정보.username%></h2>
     </div>

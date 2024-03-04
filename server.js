@@ -1,4 +1,5 @@
 /**
+ * npm init -y                  // nodejs 사용을 위한 초기 세팅 server.js 파일을 만들고 터미널에 입력
  * npm install express          // express 서버 가동용
  * npm install nodemon -g	    // 내용 수정시 자동재실행(노드몬은 글로벌 npm 으로 설치해야 하므로 -g를 꼭 붙여야함.)
  * npm install ejs              // ejs 문법 및 파일 사용을 위해 
@@ -11,20 +12,21 @@
  * npm install multer-s3            // multer를 통해 S3 서버에 업로드를 할수 있게 도와주는 라이브러리
  * npm install @aws-sdk/client-s3   // nodejs에서 AWS사용을 할때 필요한 sdk 라이브러리
  * npm install uuid4            // 랜덤값 기반 uuid 생성 라이브러리
+ * npm install socket.io@4      // 소켓io 4버전 라이브러리
  */
 
 //서버 선언부
-const express = require('express') // express 라이브러리 사용하겠다는 뜻
-const app = express()
-app.use(express.static(__dirname + '/static')) // 폴더를 서버 파일에 등록
+const express = require('express'); // express 라이브러리 사용하겠다는 뜻
+const app = express();
+app.use(express.static(__dirname + '/static')); // 폴더를 서버 파일에 등록
 //response(요청).body 사용을 위한 세팅
-app.use(express.json())//json 형식을 사용하기 위한 선언
-app.use(express.urlencoded({extended:true})) // url 파라미터 사용 시 필수
-require('dotenv').config() // 환경변수 세팅을 위한 dotenv 사용 설정
+app.use(express.json());//json 형식을 사용하기 위한 선언
+app.use(express.urlencoded({extended:true})); // url 파라미터 사용 시 필수
+require('dotenv').config(); // 환경변수 세팅을 위한 dotenv 사용 설정
 // ejs 선언부
-app.set('view engine', 'ejs') // ejs 세팅 (ejs는 views 폴더를 만들고 .ejs 파일로 만들어서 사용)
+app.set('view engine', 'ejs'); // ejs 세팅 (ejs는 views 폴더를 만들고 .ejs 파일로 만들어서 사용)
 // DB 데이터
-const { MongoClient } = require('mongodb') //MongoDb 사용
+const { MongoClient } = require('mongodb'); //MongoDb 사용
 const ObjectId = require('mongodb').ObjectId; //Id 값을 오브젝트 형식으로 변환하여 사용하기 위해 선언
 
 // UUID V4 세팅
@@ -76,8 +78,7 @@ const methodOverride = require('method-override')
 app.use(methodOverride('_method')) 
 
 //session 세팅부
-app.use(passport.initialize())
-app.use(session({
+const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET, // 암호화에 쓸 비밀번호
     resave: false,
     saveUninitialized: false,
@@ -86,8 +87,18 @@ app.use(session({
         mongoUrl:process.env.DB_URL,
         dbName:process.env.DB_NAME
     })
-}))
-app.use(passport.session())
+});
+app.use(passport.initialize());
+app.use(sessionMiddleware);
+app.use(passport.session());
+
+// Socket.io 4버전 세팅
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const server = createServer(app);
+const io = new Server(server);
+// Socket.io session 정보 사용 세팅
+io.engine.use(sessionMiddleware);
 
 // DB 세팅부
 connectDB = require('./database.js');
@@ -95,7 +106,7 @@ let db // 다른 요청에서 connection을 사용하기 위해 db listen 바깥
 connectDB.then((client)=>{
   console.log('mongoDB연결성공')
   db = client.db(process.env.DB_NAME) // 연결 데이터베이스 이름
-  app.listen(process.env.PORT,()=>{ //서버 기동 명령어 app.listen(port,function(){ ~ })
+  server.listen(process.env.PORT,()=>{ //서버 기동 명령어 app.listen(port,function(){ ~ }) //소켓 쓸때 app => server 변경
     console.log('http://localhost:'+process.env.PORT+' 에서 서버 실행 중') 
     })
 }).catch((err)=>{
@@ -145,9 +156,9 @@ function middleWare(request,response,next){
     //request.body response.redirect 등 사용 가능
     if(!request.user){
         // response가 실행되면 아래 다른 코드가 실행 안됨
-        return response.send('로그인을 하세요.')
+        return response.redirect('/login');
     }
-    next() // 마지막에 없으면 무한 대기 상태에 들어감
+    next(); // 마지막에 없으면 무한 대기 상태에 들어감
 }
 
 // url 이 포함된 전체 api에 적용
@@ -444,7 +455,7 @@ app.get('/list/:page', async (request,response) =>{ // async 함수
         searchWord = '';
     }
     let query = {title :{$regex : searchWord}};
-    let result = await db.collection('post').find(query).skip((currentPage-1)*listSize).limit(listSize).toArray()
+    let result = await db.collection('post').find(query).skip((currentPage-1)*listSize).limit(listSize).toArray();
     let totalCount = await db.collection('post').countDocuments(query);
     let pageInfo = setPageInfo(totalCount, currentPage);
     return response.render('list.ejs', { 
@@ -551,6 +562,180 @@ app.post('/register',userValidCheck,async(request,response) =>{
         response.redirect('/');
     }
 })
+
+app.get('/chat/request/:id', middleWare, async(req,res)=>{
+    let user = req.user;
+    let boardId = req.params.id;
+    let board = await db.collection('post').findOne({_id:new ObjectId(boardId)});
+    let checkDup = await db.collection('chatroom').findOne({
+        boardId:new ObjectId(boardId)
+        ,member:new ObjectId(user._id)
+    });
+    let query = {
+                    boardId:new ObjectId(boardId),
+                    member:[user._id,board.user],
+                    date:new Date()
+                };
+    if(checkDup == null){
+        if(String(user._id) === String(board.user)){
+            return res.redirect('/chat/list');
+        }
+        console.log('1:1 채팅방 생성');
+        await db.collection('chatroom').insertOne(query);
+    }
+    res.redirect('/chat/list');
+})
+
+/**
+ *  //aggregate 일치하는 문서만 검색
+ *  {$match :
+ *    {일치하는 조건을 걸 필드명 : "일치하는지 비교할 데이터"}
+ *  }
+ * 
+ * join 방법 aggregate 
+ *  // 필드명을 새로 만드는 기능 
+ *  {$addFields :
+ *    {"새로 만들 필드명" :
+ *      {$toObjectId : "$ 기존document의 필드명"}}
+ *  }
+ * 
+ *  // join 기능 
+ *  {$lookup :
+ *    from : join 할 collection
+ *    ,localField : 기존 document의 join할 key 필드명
+ *    ,foreignField : join 할 document의 key 필드명
+ *    ,as: join으로 새로 생설될 field의 alias // 이하 alias
+ *  } // 출력 시 기본 배열 형태로 join 데이터 필드 생성 예: { _id:ObjectId(~), name:"이름", alias:[{joinData}] }
+ * 
+ *  // 배열형태로 생성된 필드를 분리해주는 기능
+ *  // 이걸 사용하면 기존 생성된 
+ *  {$unwind:"$alias"}
+ * 
+ *  // join 후 필요한 값만 지정하여 출력하는 기능
+ *  // join시 원래있던 document에 있는 필드는 1로 지정하고
+ *  // join시 from에 사용된 document에 있는 필드는 alias 객채의 필드로 두지 않고,
+ *     아예 전체 필드 목록에 포함시키기 위해, 필드명을 직접 지정해준 뒤,
+ *     대이터를 "$alias.원하는필드"로 할당
+ *  {$project :
+ *    기존 document 필드명 : 1
+ *    , 새로운 필드명 : "$alias.필드명"
+ *  }
+ * 
+ * 
+ */
+app.get('/chat/list',middleWare,async (req,res)=>{
+    let user = req.user;
+    // let result = await db.collection('chatroom').find({member:new ObjectId(user._id)}).toArray();
+    let join = await db.collection('chatroom')
+                    .aggregate([{$match:{
+                                member:new ObjectId(user._id)
+                            }}
+                            ,{$lookup:{
+                                from:"post"
+                                ,localField:"boardId"
+                                ,foreignField:"_id"
+                                ,as: "postInfo"
+                            }}
+                            ,{$lookup:{
+                                from:"user"
+                                ,localField:"member"
+                                ,foreignField:"_id"
+                                ,as:"userInfo"
+                            }}
+                            ,{$unwind:"$postInfo"}
+                            ,{$project:{
+                                _id : 1
+                                ,boardId : 1
+                                ,member : 1
+                                ,date : 1
+                                ,boardTitle:"$postInfo.title"
+                                ,userInfo: 1
+                            }}
+                        ]).toArray();
+    res.render('chatList.ejs',{result:join});
+})
+
+app.get('/chat/detail/:id', middleWare, async(req,res)=>{
+    let query = {_id:new ObjectId(req.params.id)
+                ,member:new ObjectId(req.user._id)};
+    let result = await db.collection('chatroom').findOne(query);
+    if(result == null){
+        return res.send("잘못된 접근입니다.");
+    }
+    let cntntQuery = {
+        chatId:new ObjectId(req.params.id)
+    };
+    // 더보기 여부 체크
+    let count = await db.collection('chatcontent').countDocuments(cntntQuery);
+    let more = false;
+    if(count > listSize){
+        more = true;
+    }
+    // 데이터 가져오기
+    let chatCntnt = await db.collection('chatcontent').find(cntntQuery).sort({_id:-1}).limit(listSize).toArray();
+    res.render('chatroom.ejs',{result:result, user:req.user, chatCntnt:chatCntnt, more:more});
+})
+
+app.post('/chat/chatlist/:id', middleWare,async(req,res)=>{
+    let lastId = req.body.lastId;
+    let query = {_id:new ObjectId(req.params.id)
+                ,member:new ObjectId(req.user._id)};
+    let result = await db.collection('chatroom').findOne(query);
+    if(result == null){
+        return res.send("잘못된 접근입니다.");
+    }
+    let cntntQuery = {
+        chatId:new ObjectId(req.params.id)
+        ,_id : {$lt :new ObjectId(lastId)}
+    };
+    // 더보기 여부 체크
+    let count = await db.collection('chatcontent').countDocuments(cntntQuery);
+    let more = false;
+    if(count > listSize){
+        more = true;
+    };
+    // 데이터 가져오기
+    let chatCntnt = await db.collection('chatcontent').find(cntntQuery).sort({_id:-1}).limit(listSize).toArray();
+    
+    res.json({chatCntnt:chatCntnt,more:more});
+})
+
+/** 
+ * socket.io 실제 서비스 시 중요한 내용이면 socket.io + DB adapter 쓰는게 좋을수도 (메모리가 아니라 DB에 저장해줌)
+*/
+io.on('connection', (socket)=>{ //소켓연결
+    console.log("웹소켓 열림");
+    const session = socket.request.session;
+    socket.on('ask-join',async(data)=>{
+        let user = session.passport.user;
+        let check = await db.collection('chatroom').findOne({
+            _id:new ObjectId(data)
+            , member:new ObjectId(user.id)
+        })
+        if(check === null){ 
+            console.log(false);
+            return false;
+        };
+        socket.join(data); // 방 들어가기
+    })
+
+    socket.on('message',async (data)=>{
+        let user = session.passport.user;
+        let query = {
+                chatId : new ObjectId(data.room)
+                , username:user.username
+                , msg:data.msg
+                , date:new Date()
+                , user:new ObjectId(user.id)}
+        await db.collection('chatcontent').insertOne(query);
+        io.to(data.room).emit('broadcast',{
+            msg:data.msg
+            ,sendUser:user.username
+        })
+    })
+
+})
+
 // 라우터 분리 파일 사용방법
 // app.use() 안에 require로 해당 파일 사용
 // 참고1. import로도 사용가능 import 사용시 require 를 import로 전부 변경 필요

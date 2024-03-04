@@ -5,11 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>목록</title>
-    <%- include('tiles/head.ejs') %>
+    <%- include('navigation/head.ejs') %>
 </head>
 <body class="grey-bg">
     <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
-    <%- include('tiles/nav.ejs') %>
+    <%- include('navigation/nav.ejs') %>
     <div class="white-bg">
       <div class="input-group me-3"><input type="text" id="searchWord" value="<%=searchWord%>"><a class="btn btn-primary" id="searchBtn">검색</a></div>
       <!-- 서버사이드 랜더링 (클라이언트사이드 렌더링도 있음)-->
@@ -21,6 +21,9 @@
             <a class="title" href="/detail/<%=글목록[i]._id%>"><%=글목록[i].title%></a>
             <% if(String(글목록[i].user) == String(user._id)) { %>
               <span class="delete" data-id="<%=글목록[i]._id%>">🗑️</span>
+            <% } %>
+            <% if((글목록[i].user != null)){ %>
+              <a class="" href="/chat/request/<%=글목록[i]._id%>">채팅요청</a>
             <% } %>
           </h4>
         </div>

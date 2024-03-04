@@ -11,6 +11,13 @@ connectDB.then((client)=>{
   console.log(err)
 })
 
+// UUID V4 세팅
+const {v4} = require('uuid');
+const uuid = ()=>{
+    const tokens = v4().split('-');
+    return tokens[2] + tokens[1] +  tokens[0] + tokens[3] + tokens[4];
+}
+
 // AWS S3 이미지 업로드 세팅
 const { S3Client } = require('@aws-sdk/client-s3')
 const multer = require('multer')

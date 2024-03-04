@@ -1,0 +1,46 @@
+<!-- ejs == html 같이 작성 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>목록</title>
+    <%- include('navigation/head.ejs') %>
+</head>
+<body class="grey-bg">
+    <!-- include로 상단바 가져오기 ( - = 데이터 표출 차이점은 =는 html escape되서 만들어지고 -는 html이 escape되지 않고 가져옴) -->
+    <%- include('navigation/nav.ejs') %>
+    <div class="white-bg">
+      <div class="input-group me-3">
+        <input type="text" id="searchWord" value="">
+        <a class="btn btn-primary" id="searchBtn">검색</a>
+      </div>
+      <!-- 서버사이드 랜더링 (클라이언트사이드 렌더링도 있음)-->
+      <!-- ejs 반복문 -->
+      <div id="listBody">
+        <% for(let i = 0; i< result.length ; i++){ %>
+        <h4>
+            <a href="/chat/detail/<%=result[i]._id%>">채팅방 <%=(i+1)%></a>
+        </h4>
+        <p>
+          제목 <%=result[i].boardTitle%> 의 
+          <% for(let j=0;j<result[i].userInfo.length;j++){ %>
+            <%=result[i].userInfo[j].username%>
+            <%if(j===0){%>
+              님과 
+            <% }else{ %>
+              님의
+            <% } %>
+          <% } %>
+          채팅방
+        </p>
+        <%  } %>
+      </div>
+    </div>
+    <ul id="pagination" class="pagination">
+    </ul>
+  </body>
+</html>
+<script>
+  
+</script>
