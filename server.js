@@ -13,6 +13,7 @@
  * npm install @aws-sdk/client-s3   // nodejs에서 AWS사용을 할때 필요한 sdk 라이브러리
  * npm install uuid4            // 랜덤값 기반 uuid 생성 라이브러리
  * npm install socket.io@4      // 소켓io 4버전 라이브러리
+ *      // Server send event
  */
 
 //서버 선언부
@@ -102,10 +103,16 @@ io.engine.use(sessionMiddleware);
 
 // DB 세팅부
 connectDB = require('./database.js');
-let db // 다른 요청에서 connection을 사용하기 위해 db listen 바깥에 선언
+let db; // 다른 요청에서 connection을 사용하기 위해 db listen 바깥에 선언
+let changeStream; // insert 발생시 insert 가된 것을 감지하기 위한 변수
 connectDB.then((client)=>{
   console.log('mongoDB연결성공')
   db = client.db(process.env.DB_NAME) // 연결 데이터베이스 이름
+  let watchOption =[ // 감시 옵션
+    {$match : {operationType : 'insert'}}
+    //{$match : {'fullDocument.title' : '바보'}} //title이 '바보' 일때만 감지
+  ]
+  changeStream = db.collection('post').watch(watchOption); // post document insert 감시
   server.listen(process.env.PORT,()=>{ //서버 기동 명령어 app.listen(port,function(){ ~ }) //소켓 쓸때 app => server 변경
     console.log('http://localhost:'+process.env.PORT+' 에서 서버 실행 중') 
     })
@@ -734,6 +741,71 @@ io.on('connection', (socket)=>{ //소켓연결
         })
     })
 
+})
+
+/** Server send evnet(SSE)
+ * 원래 서버가 응답하면 연결이 끊기지만 끊지 안고 유지한 상태로 응답 할 수 있음
+ * 1. header를'Connection':'keep-alive'로 설정
+ * 2. response.write(전송할데이터)
+ * header는 서버와 클라이언트간 데이터 전달 시 전달하고자 하는 데이터 이외의
+ * 부가 정보들 브라우저,OS,언어,쿠키,날짜,전달하는 데이터 타입 등 입니다.
+ * request header : 유저에서 서버로 전달되는 부가정보
+ * response header : 서버에서 유저로 전달되는 부가정보
+*/
+app.get('/stream/list',(req,res)=>{
+    res.writeHead(200,{
+        "Connection": "keep-alive",
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+      });
+      // 작성 룰이 있음 최소 2개를 작성 event,data. : 이후 가운데 스페이스바도 필수
+      res.write('event: msg\n'); // event: msg\n
+      res.write('data: 연결확인\n\n'); // data: 데이터\n\n
+    //   setInterval(function(){
+    //   res.write('event: msg\n');
+    //   res.write('data: 데이터데이터\n\n');
+    //   },1000); //1초마다 실행
+
+    //MongoDB change stream 변동사항 감지
+    // watch에 조건 추가 가능 (MongoDB 조건은 배열로 감싸고 Object 형태로 생성)
+    // GET요청할때만 감시 기능을 사용하면 부담이 되므로 
+    // 서버를 띄울때만 한번 감시를 사용하기 위해 DB세팅부의 connectDB에 옮김
+    /* 
+    let watchOption =[
+        {$match : {operationType : 'insert'}}
+        //{$match : {'fullDocument.title' : '바보'}} //title이 '바보' 일때만 감지
+    ]
+    let changeStream = db.collection('post').watch(watchOption);
+    */
+    changeStream.on('change',(result)=>{ //변수.on을 이용해 eventListener 처럼 사용
+        console.log(result.fullDocument);
+        /* result 예시
+            {
+            _id: {
+                _data: '8265E6B020000000032B022C0100296E5A100458006E3326D74D83B6B57ED5AB68F02746645F6964006465E6B01EE555C6CDA293FD330004'
+            },
+            operationType: 'insert',
+            clusterTime: new Timestamp({ t: 1709617184, i: 3 }),
+            wallTime: 2024-03-05T05:39:44.645Z,
+            fullDocument: {
+                _id: new ObjectId("65e6b01ee555c6cda293fd33"),
+                title: '어쩔시구 저쩔시구',
+                content: '1234',
+                img: '',
+                user: new ObjectId("65d8396da2ece5f1e02a073c"),
+                username: 'test2'
+            },
+            ns: { db: 'forum', coll: 'post' },
+            documentKey: { _id: new ObjectId("65e6b01ee555c6cda293fd33") }
+            }
+        */
+        // insert 발생 시 데이터 전송 부
+        res.write('event: msg\n');
+        res.write('data: '+JSON.stringify(result.fullDocument)+'\n\n');
+        // JSON.stringify(data)를 그대로 쓰면 string으로 나가므로 
+        // ` (backtick : 윗 숫자 키보드 1 옆에 ` 키) 기호로 전체내용을 묶고 사용할 데이터를 ${} 로 묶어서 전송 가능 
+        // 예 : res.write(`data: ${JSON.stringify(result.fullDocument)}\n\n`);
+    })
 })
 
 // 라우터 분리 파일 사용방법

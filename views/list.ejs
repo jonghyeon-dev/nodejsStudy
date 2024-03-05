@@ -56,6 +56,30 @@
         <li><a href="/list/<%=pageInfo.last%><%=searchUrl%>">&#187;</a></li>
       <% } %>
     </ul>
+    <!-- SSE연결
+      SSE연결을 원하면
+      new EventSource('/URL')
+      서버에서 event 로 보내는 key값이 예로 msg면 여기서도 msg로 받아서 확인
+    -->
+    <script> 
+      let eventSource = new EventSource('/stream/list')
+      eventSource.addEventListener('msg',function(e){
+        console.log(e.data);
+        let objData = JSON.parse(e.data) // array/object로 변경
+        let view = '<div class="list-box">';
+        view = view + '<h4>';
+        view = view + '<a class="title" href="/detail/'+objData._id+'">'+objData.title+'</a>'
+        if(String(e.data.user) == String('<%=user._id%>')){
+          view = view + `<span class="delete" data-id="${objData._id}">🗑️</span>`
+        }
+        if(e.data.user != null){
+          view = view + `<a class="" href="/chat/request/${objData._id}">채팅요청</a>`
+        }
+        view = view + '</h4>'
+        view = view + '</div>'
+        document.querySelector('.white-bg').insertAdjacentElement('afterbegin',view);
+      })
+    </script>
   </body>
 </html>
 <!-- <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script> -->
